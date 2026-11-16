@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "affinity": {
+      "type": "stdio",
+      "command": "pi-affinity-mcp"
+    }
+  },
+  "imports": []
+}

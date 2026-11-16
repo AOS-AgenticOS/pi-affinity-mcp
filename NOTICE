@@ -1,0 +1,19 @@
+NOTICE
+======
+
+This project is an independent, unofficial adapter. It is not affiliated with,
+endorsed by, or supported by Canva or the Affinity team.
+
+"Affinity", "Affinity by Canva" and the Affinity logo are trademarks of Canva.
+The Affinity JavaScript SDK, its documentation and its example scripts are the
+property of Canva and are governed by Affinity's own terms.
+
+This repository therefore contains none of them:
+
+- The SDK documentation is read at runtime from the user's own Affinity
+  installation, through the MCP server the app exposes (`--dump-docs` writes a
+  local cache; that cache is git-ignored and never published).
+- The example scripts under `examples/` were written for this project; none is
+  copied or adapted from the examples shipped inside the app.
+
+The MIT license in LICENSE covers this project's own source code only.

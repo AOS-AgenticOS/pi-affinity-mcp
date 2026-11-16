@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+*.tsbuildinfo
+
+# Generated caches (regenerate with `pi-affinity-mcp --dump-docs reference`)
+reference/
+.affinity-docs/
+
+# Local noise
+.DS_Store
+*.log
+coverage/
+*.tgz
+
+# NOTE: dist/ is intentionally not ignored — pi installs git packages without a
+# build step, so the entry point the extension points at must be in the checkout.
+# `npm run verify:dist` fails when it is stale, and CI runs it.

@@ -1,0 +1,78 @@
+{
+  "name": "pi-affinity-mcp",
+  "version": "0.1.0",
+  "description": "MCP server and Pi package for Affinity by Canva: read the JS SDK docs, run scripts against the live app, render spreads.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "pi-affinity-mcp": "./dist/cli.js"
+  },
+  "main": "./dist/client.js",
+  "types": "./dist/client.d.ts",
+  "exports": {
+    ".": "./dist/client.js",
+    "./client": "./dist/client.js",
+    "./bridge": "./dist/bridge.js"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/register.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "files": [
+    "dist",
+    "extensions",
+    "skills",
+    "examples",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "pi-package",
+    "mcp",
+    "mcp-server",
+    "affinity",
+    "canva",
+    "design-automation",
+    "layout"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck:extension": "tsc -p tsconfig.extension.json",
+    "verify:dist": "npm run build && git diff --exit-code --stat -- dist",
+    "test": "node --test test/*.test.js",
+    "check": "npm run build && npm run typecheck:extension && npm run test",
+    "prepublishOnly": "npm run check",
+    "selftest": "node dist/cli.js --selftest"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.5.2",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikolodz/pi-affinity-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mikolodz/pi-affinity-mcp/issues"
+  },
+  "homepage": "https://github.com/mikolodz/pi-affinity-mcp#readme"
+}
