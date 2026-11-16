@@ -56,6 +56,13 @@ const runScript = {
   params: { name: "execute_script", arguments: { script: "console.log('from a web page')" } },
 };
 
+test("rejects a token of another length, a wrong one of the same length and a bare token", async () => {
+  for (const authorization of ["Bearer x", `Bearer ${"y".repeat(token.length)}`, token, ""]) {
+    const response = await post({ jsonrpc: "2.0", id: 1, method: "ping" }, { authorization });
+    assert.equal(response.status, 401, authorization);
+  }
+});
+
 test("rejects requests without the bearer token", async () => {
   const response = await post({ jsonrpc: "2.0", id: 1, method: "ping" }, { authorization: "" });
   assert.equal(response.status, 401);

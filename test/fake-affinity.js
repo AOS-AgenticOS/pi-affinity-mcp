@@ -88,6 +88,23 @@ export async function startFakeAffinity() {
     protocolVersion: "2025-11-25",
     /** What tools/list answers; an app update can change it. */
     tools: [...FAKE_TOOLS],
+    /** Session UUIDs of the open documents. */
+    documents: [],
+    /** What a script that is not the bridge's own bookkeeping does to the app (a test sets it). */
+    onScript: () => {},
+  };
+
+  /** The bridge's own scripts read and close documents; every other script is the client's. */
+  const runScript = (script) => {
+    if (script.includes("Document.all.map((d) => d.sessionUuid)")) return JSON.stringify(state.documents);
+    const own = /const own = new Set\((\[.*?\])\);/.exec(script);
+    if (own) {
+      const closed = state.documents.filter((uuid) => JSON.parse(own[1]).includes(uuid));
+      state.documents = state.documents.filter((uuid) => !closed.includes(uuid));
+      return JSON.stringify(closed);
+    }
+    state.onScript(script);
+    return JSON.stringify({ version: "Affinity fake", documents: [] });
   };
 
   const handleCall = (session, name, args) => {
@@ -112,7 +129,7 @@ export async function startFakeAffinity() {
       case "execute_script":
         if (!session.primed) return text(GATE_REFUSAL, true);
         state.executions += 1;
-        return text(`${JSON.stringify({ version: "Affinity fake", documents: [] })}\n`);
+        return text(`${runScript(String(args.script))}\n`);
       case "list_library_scripts":
         return text("");
       case "render_spread":

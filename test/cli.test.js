@@ -191,3 +191,26 @@ test("--version and --help exit without touching the app", async () => {
   assert.equal(help.code, 0);
   assert.match(help.output, /pi-affinity-mcp/);
 });
+
+test("told to stop, a server with --close-documents closes what its scripts opened; --tools limits what it offers", async () => {
+  fake.state.documents = ["PERSON"];
+  fake.state.onScript = () => fake.state.documents.push("AGENT");
+  const run = runCli(["--url", fake.url, "--tools", "execute_script", "--close-documents"]);
+  initialize(run);
+  run.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
+  run.send({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "execute_script", arguments: { script: "open" } } });
+  run.send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "list_library_scripts", arguments: {} } });
+  await run.waitFor(4);
+  const byId = Object.fromEntries(run.responses.map((response) => [response.id, response]));
+  assert.deepEqual(byId[2].result.tools.map((tool) => tool.name), ["execute_script"]);
+  assert.equal(byId[4].error.code, -32602);
+  assert.deepEqual(fake.state.documents, ["PERSON", "AGENT"]);
+
+  run.child.kill("SIGTERM");
+  const deadline = Date.now() + 5000;
+  while (run.exitCode() === null && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(run.exitCode(), 0, run.stderr.join(" | "));
+  assert.deepEqual(fake.state.documents, ["PERSON"]);
+  fake.state.documents = [];
+  fake.state.onScript = () => {};
+});

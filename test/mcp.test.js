@@ -114,3 +114,36 @@ test("batches return one response per request and drop notifications", async () 
     [1, 2],
   );
 });
+
+test("with an allowlist, only those tools are listed and callable", async () => {
+  const called = [];
+  const bridge = stubBridge({
+    listTools: async () => [{ name: "execute_script" }, { name: "report_sdk_issue" }, { name: "render_spread" }],
+    callTool: async (name) => {
+      called.push(name);
+      return { content: [{ type: "text", text: "ok" }] };
+    },
+  });
+  const core = new McpServerCore(bridge, { tools: new Set(["execute_script", "render_spread"]) });
+
+  const listed = await core.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+  assert.deepEqual(listed.result.tools.map((tool) => tool.name), ["execute_script", "render_spread"]);
+
+  const refused = await core.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: { name: "report_sdk_issue", arguments: { description: "x" } },
+  });
+  assert.equal(refused.error.code, -32602);
+  assert.match(refused.error.message, /not offered/);
+
+  const allowed = await core.handle({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: { name: "execute_script", arguments: { script: "1" } },
+  });
+  assert.equal(allowed.result.content[0].text, "ok");
+  assert.deepEqual(called, ["execute_script"]);
+});

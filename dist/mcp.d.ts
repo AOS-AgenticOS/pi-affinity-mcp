@@ -10,6 +10,11 @@ import type { JsonRpcRequest, JsonRpcResponse } from "./types.js";
 export type McpServerOptions = {
     /** Whether this transport can send `notifications/tools/list_changed` (stdio can, stateless HTTP cannot). */
     listChanged?: boolean;
+    /**
+     * The only tools this server offers (`--tools`); unset: every tool Affinity has. Enforced here, not left to the
+     * client: an agent with a shell can call this server directly, whatever its own client hides.
+     */
+    tools?: ReadonlySet<string>;
 };
 export declare class McpServerCore {
     private readonly bridge;

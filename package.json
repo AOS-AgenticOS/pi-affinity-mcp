@@ -1,6 +1,6 @@
 {
   "name": "pi-affinity-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server and Pi package for Affinity by Canva: read the JS SDK docs, run scripts against the live app, render spreads.",
   "license": "MIT",
   "type": "module",

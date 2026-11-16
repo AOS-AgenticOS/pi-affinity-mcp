@@ -25,6 +25,11 @@ const INSTRUCTIONS = [
 export type McpServerOptions = {
   /** Whether this transport can send `notifications/tools/list_changed` (stdio can, stateless HTTP cannot). */
   listChanged?: boolean;
+  /**
+   * The only tools this server offers (`--tools`); unset: every tool Affinity has. Enforced here, not left to the
+   * client: an agent with a shell can call this server directly, whatever its own client hides.
+   */
+  tools?: ReadonlySet<string>;
 };
 
 export class McpServerCore {
@@ -67,7 +72,9 @@ export class McpServerCore {
         return ok({});
       case "tools/list": {
         try {
-          return ok({ tools: await this.bridge.listTools() });
+          const tools = await this.bridge.listTools();
+          const offered = this.options.tools;
+          return ok({ tools: offered ? tools.filter((tool) => offered.has(String(tool.name))) : tools });
         } catch (error) {
           return fail(-32603, `Affinity unavailable: ${(error as Error).message}`);
         }
@@ -75,6 +82,9 @@ export class McpServerCore {
       case "tools/call": {
         const name = message.params?.name;
         if (typeof name !== "string" || !name) return fail(-32602, "tools/call needs a tool name");
+        if (this.options.tools && !this.options.tools.has(name)) {
+          return fail(-32602, `Tool not offered by this server: ${name}`);
+        }
         const args = (message.params?.arguments ?? {}) as Record<string, unknown>;
         try {
           return ok(await this.bridge.callTool(name, args));

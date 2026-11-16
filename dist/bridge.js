@@ -8,12 +8,25 @@
  *  - open a new session when the stream ends (Affinity quit or restarted),
  *  - re-read the tool list on every new session and emit `toolsChanged` when it differs,
  *  - on timeout, drop the session; re-send the call once only if it is read-only,
- *  - serialise calls, because the upstream session is a single request/response channel.
+ *  - serialise calls, because the upstream session is a single request/response channel,
+ *  - with `ownDocuments`, know which documents its scripts opened, to close exactly those when it stops.
  */
 import { EventEmitter } from "node:events";
 import { AffinityClient, AffinityError, AffinityTimeoutError, flatten } from "./client.js";
 import { DEFAULT_TIMEOUT_MS, DEFAULT_URL, GATE_REFUSAL, GATED_TOOLS, PREAMBLE_TOOL, PREAMBLE_TOPIC, READ_ONLY_TOOLS, } from "./protocol.js";
 const isGateRefusal = (result) => GATE_REFUSAL.test(flatten(result).trim());
+const SCRIPT_TOOL = "execute_script";
+const OPEN_DOCUMENTS_SCRIPT = [
+    "const { Document } = require('/document.js');",
+    "console.log(JSON.stringify(Document.all.map((d) => d.sessionUuid)));",
+].join("\n");
+const closeDocumentsScript = (uuids) => [
+    "const { Document } = require('/document.js');",
+    `const own = new Set(${JSON.stringify(uuids)});`,
+    "const closed = [];",
+    "for (const d of Document.all.filter((d) => own.has(d.sessionUuid))) { closed.push(d.sessionUuid); d.close(); }",
+    "console.log(JSON.stringify(closed));",
+].join("\n");
 export class AffinityBridge extends EventEmitter {
     url;
     timeoutMs;
@@ -22,11 +35,19 @@ export class AffinityBridge extends EventEmitter {
     primed = false;
     tail = Promise.resolve();
     tools;
+    ownDocuments;
+    /** Documents a script of this bridge opened and has not closed. */
+    owned = new Set();
+    /** Documents that were open before, or appeared between this bridge's scripts: somebody else's. */
+    others = new Set();
+    /** A script of this bridge never answered: what it opened is still unrecorded. */
+    unsettled = false;
     constructor(options) {
         super();
         this.url = options.url || DEFAULT_URL;
         this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
         this.debug = options.debug ?? false;
+        this.ownDocuments = options.ownDocuments ?? false;
     }
     log(...parts) {
         if (this.debug)
@@ -108,6 +129,32 @@ export class AffinityBridge extends EventEmitter {
         }
         return result;
     }
+    /**
+     * Read which documents are open. One not seen before is this bridge's when `mine` (seen right after its own
+     * script, or after a script of its own that never answered), somebody else's otherwise.
+     */
+    async observe(mine) {
+        const result = await this.invoke(SCRIPT_TOOL, { script: OPEN_DOCUMENTS_SCRIPT });
+        if (result.isError)
+            throw new AffinityError(`could not list the open documents: ${flatten(result).slice(0, 300)}`);
+        const open = new Set(JSON.parse(flatten(result)));
+        for (const uuid of open) {
+            if (!this.owned.has(uuid) && !this.others.has(uuid))
+                (mine ? this.owned : this.others).add(uuid);
+        }
+        for (const uuid of this.owned)
+            if (!open.has(uuid))
+                this.owned.delete(uuid);
+    }
+    /** A script, with the documents it opens recorded as this bridge's. */
+    async runOwnScript(args) {
+        await this.observe(this.unsettled);
+        this.unsettled = true;
+        const result = await this.invoke(SCRIPT_TOOL, args);
+        await this.observe(true);
+        this.unsettled = false;
+        return result;
+    }
     serialize(task) {
         const run = this.tail.then(task, task);
         this.tail = run.then(() => undefined, () => undefined);
@@ -116,6 +163,8 @@ export class AffinityBridge extends EventEmitter {
     async callTool(name, args) {
         return await this.serialize(async () => {
             try {
+                if (this.ownDocuments && name === SCRIPT_TOOL)
+                    return await this.runOwnScript(args);
                 return await this.invoke(name, args);
             }
             catch (error) {
@@ -141,6 +190,22 @@ export class AffinityBridge extends EventEmitter {
                 this.tools ??= await client.listTools();
             }
             return this.tools;
+        });
+    }
+    /** Close the documents this bridge's scripts opened and left open; returns their session UUIDs. */
+    async closeDocuments() {
+        return await this.serialize(async () => {
+            if (this.unsettled)
+                await this.observe(true);
+            if (this.owned.size === 0)
+                return [];
+            const result = await this.invoke(SCRIPT_TOOL, { script: closeDocumentsScript([...this.owned]) });
+            if (result.isError)
+                throw new AffinityError(`could not close the documents: ${flatten(result).slice(0, 300)}`);
+            const closed = JSON.parse(flatten(result));
+            for (const uuid of closed)
+                this.owned.delete(uuid);
+            return closed;
         });
     }
     close() {

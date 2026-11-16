@@ -143,9 +143,11 @@ pi-affinity-mcp --dump-docs <dir>   save the SDK documentation and tool schemas 
 | `--timeout <s>` | how long a call may take, default 60; raise it for long scripts |
 | `--host`, `--port` | HTTP address and port, default `127.0.0.1:7767` |
 | `--token <secret>` | bearer token for `--http` |
+| `--tools <a,b,…>` | offer only these tools; calls to any other are refused |
+| `--close-documents` | when told to stop (SIGTERM, SIGINT), close the documents its scripts opened |
 | `--debug` | log protocol traffic to stderr |
 
-Environment variables: `AFFINITY_MCP_URL`, `AFFINITY_MCP_TIMEOUT`, `AFFINITY_MCP_TOKEN`.
+Environment variables: `AFFINITY_MCP_URL`, `AFFINITY_MCP_TIMEOUT`, `AFFINITY_MCP_TOKEN`, `AFFINITY_MCP_TOOLS`.
 
 `--dump-docs reference` saves the SDK documentation from your Affinity installation for offline reading.
 The documentation is Canva's, so this repository does not include it, and `reference/` is git-ignored.
@@ -159,6 +161,8 @@ The documentation is Canva's, so this repository does not include it, and `refer
   `401`. `GET /healthz` answers without a token, for health checks.
 - `--http` refuses (`403`) requests from a web page on another origin, so a site you visit cannot run
   scripts in Affinity through it.
+- Some of Affinity's tools send what the agent wrote to Canva (`search_sdk_hints`, `add_sdk_hint`,
+  `report_sdk_issue`). `--tools` leaves them out: the server then refuses them whatever the client asks.
 - No telemetry, and no network traffic other than to the Affinity endpoint.
 
 ## Troubleshooting
