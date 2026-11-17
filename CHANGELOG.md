@@ -2,6 +2,13 @@
 
 Version headings follow the format pi and npm expect (`## [x.y.z]`).
 
+## [0.2.1] - 2026-11-17
+
+- `--selftest --folder <dir>`: also has the app read a file it is given in `<dir>`, and removes it after. On a Mac the
+  app does not answer while macOS asks, on the machine's screen, whether it may read a protected folder (the Desktop,
+  Documents, Downloads), though scripts that read nothing still answer: the self-test then fails, saying where to allow
+  it, instead of a later script hanging.
+
 ## [0.2.0] - 2026-11-17
 
 For a server that one agent's work owns (started for it, stopped after it).

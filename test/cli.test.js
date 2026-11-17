@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -168,6 +168,37 @@ test("--dump-docs writes every topic, including those listed before the preamble
       "documentation for application.js\n",
     );
   } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("--selftest --folder has the app read a file it is given in that folder, and says when it cannot", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-affinity-mcp-folder-"));
+  const selftest = async (...more) => {
+    const child = spawn(process.execPath, ["dist/cli.js", "--url", fake.url, "--selftest", "--folder", dir, ...more]);
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk;
+    });
+    const code = await new Promise((resolve) => child.on("close", resolve));
+    return { code, output };
+  };
+  try {
+    const reads = await selftest();
+    assert.equal(reads.code, 0, reads.output);
+    assert.match(reads.output, /the app reads files in /);
+
+    fake.state.unreadable = true; // the app waits for leave to read the folder: the script never answers
+    const waits = await selftest("--timeout", "1");
+    assert.equal(waits.code, 1);
+    assert.match(waits.output, /did not read a file in .*Privacy & Security → Files and Folders/s);
+
+    assert.deepEqual(await readdir(dir), [], "the file it was given is gone");
+  } finally {
+    fake.state.unreadable = false;
     await rm(dir, { recursive: true, force: true });
   }
 });
