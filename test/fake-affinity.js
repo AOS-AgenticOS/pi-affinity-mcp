@@ -92,6 +92,8 @@ export async function startFakeAffinity() {
     documents: [],
     /** What a script that is not the bridge's own bookkeeping does to the app (a test sets it). */
     onScript: () => {},
+    /** How long the app takes to answer a message, in milliseconds. */
+    answerMs: 0,
   };
 
   /** The bridge's own scripts read and close documents; every other script is the client's. */
@@ -216,7 +218,7 @@ export async function startFakeAffinity() {
             message = undefined;
           }
           const answer = message && respond(session, message);
-          if (answer) session.stream.write(`event: message\r\ndata: ${JSON.stringify(answer)}\r\n\r\n`);
+          if (answer) setTimeout(() => session.stream.write(`event: message\r\ndata: ${JSON.stringify(answer)}\r\n\r\n`), state.answerMs);
         }
         // Affinity's answer is on the stream before the POST returns.
         setTimeout(() => response.writeHead(202).end("Accepted"), 20);

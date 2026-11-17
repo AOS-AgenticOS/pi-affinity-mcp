@@ -9,7 +9,8 @@ For a server that one agent's work owns (started for it, stopped after it).
 - `--tools <a,b,…>` (`AFFINITY_MCP_TOOLS`): the server lists only these tools and refuses calls to the others. The
   limit is the server's own, so a client with direct access to it cannot call a hidden tool.
 - `--close-documents`: the server records which documents its scripts opened and, on SIGTERM or SIGINT, closes those
-  still open; documents a person opened in the app are never touched.
+  still open; documents a person opened in the app are never touched. A second signal while it closes them changes
+  nothing.
 - The bearer token is compared in constant time.
 
 ## [0.1.0] - 2026-11-16

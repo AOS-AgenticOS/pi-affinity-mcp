@@ -228,8 +228,13 @@ async function main(argv: string[]): Promise<number> {
     bridge.close();
     process.exit(0);
   };
-  process.once("SIGTERM", () => void shutdown());
-  process.once("SIGINT", () => void shutdown());
+  // A second signal while the documents close changes nothing: whoever stops this server may ask twice.
+  let stopping: Promise<void> | undefined;
+  const stop = (): void => {
+    stopping ??= shutdown();
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
 
   try {
     if (options.selftest) return await selftest(bridge);

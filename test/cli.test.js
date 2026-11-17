@@ -206,11 +206,15 @@ test("told to stop, a server with --close-documents closes what its scripts open
   assert.equal(byId[4].error.code, -32602);
   assert.deepEqual(fake.state.documents, ["PERSON", "AGENT"]);
 
+  fake.state.answerMs = 300; // closing takes a moment
   run.child.kill("SIGTERM");
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  run.child.kill("SIGTERM"); // told again meanwhile: the closing is not cut short
   const deadline = Date.now() + 5000;
   while (run.exitCode() === null && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(run.exitCode(), 0, run.stderr.join(" | "));
   assert.deepEqual(fake.state.documents, ["PERSON"]);
   fake.state.documents = [];
   fake.state.onScript = () => {};
+  fake.state.answerMs = 0;
 });
