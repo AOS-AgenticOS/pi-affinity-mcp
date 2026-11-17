@@ -5,10 +5,11 @@
  * Default (no arguments) is the stdio MCP server: that is what pi, mcporter,
  * Claude Desktop and Codex spawn.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { AffinityBridge } from "./bridge.js";
-import { flatten } from "./client.js";
+import { AffinityTimeoutError, flatten } from "./client.js";
 import { startHttpServer } from "./http.js";
 import { McpServerCore, runStdioServer } from "./mcp.js";
 import { DEFAULT_TIMEOUT_MS, DEFAULT_URL } from "./protocol.js";
@@ -19,6 +20,8 @@ Usage:
   pi-affinity-mcp                     stdio MCP server (what MCP clients spawn)
   pi-affinity-mcp --http              streamable HTTP MCP server on 127.0.0.1:7767/mcp
   pi-affinity-mcp --selftest          check the app is reachable and scripting works
+  pi-affinity-mcp --selftest --folder <dir>
+                                      … and that the app reads a file it is given in <dir>
   pi-affinity-mcp --dump-docs <dir>   write the SDK documentation and tool schemas to <dir>
 
 Options:
@@ -105,6 +108,9 @@ function parseArgs(argv) {
             case "--selftest":
                 options.selftest = true;
                 break;
+            case "--folder":
+                options.folder = resolve(next());
+                break;
             case "--dump-docs":
                 options.dumpDocs = next();
                 break;
@@ -112,6 +118,8 @@ function parseArgs(argv) {
                 throw new Error(`unknown argument: ${arg}`);
         }
     }
+    if (options.folder !== undefined && !options.selftest)
+        throw new Error("--folder goes with --selftest");
     return options;
 }
 const VERSION_SCRIPT = [
@@ -123,7 +131,7 @@ const VERSION_SCRIPT = [
     "  documents: Document.all.map((d) => ({ name: d.name, sessionUuid: d.sessionUuid })),",
     "}));",
 ].join("\n");
-async function selftest(bridge) {
+async function selftest(bridge, options) {
     const tools = await bridge.listTools();
     console.log(`tools: ${tools.length}`);
     for (const tool of tools)
@@ -132,7 +140,40 @@ async function selftest(bridge) {
     const text = flatten(result);
     console.log(`execute_script isError: ${String(result.isError ?? false)}`);
     console.log(text.slice(0, 800));
-    return result.isError ? 1 : 0;
+    if (result.isError)
+        return 1;
+    return options.folder === undefined ? 0 : await readsFolder(bridge, options.folder, options.timeoutMs);
+}
+/**
+ * Whether the app reads a file it is given in `folder`, as a session's scripts do. On a Mac the app does not answer
+ * while macOS asks, on the machine's screen, whether it may read a protected folder (the Desktop, Documents,
+ * Downloads); scripts that read nothing answer meanwhile, so only a read shows it.
+ */
+async function readsFolder(bridge, folder, timeoutMs) {
+    const marker = randomUUID();
+    const file = join(folder, `.selftest-${marker}.js`); // a name of its own: the app keeps what it once required
+    const allow = "System Settings → Privacy & Security → Files and Folders → Affinity";
+    await writeFile(file, `module.exports = ${JSON.stringify(marker)};\n`);
+    try {
+        const result = await bridge.callTool("execute_script", { script: `console.log(require(${JSON.stringify(file)}));` });
+        const answer = flatten(result).trim();
+        if (answer === marker) {
+            console.log(`the app reads files in ${folder}`);
+            return 0;
+        }
+        console.error(`the app could not read ${file}: ${answer.slice(0, 200)}. On a Mac, allow Affinity that folder in ${allow}.`);
+        return 1;
+    }
+    catch (error) {
+        if (!(error instanceof AffinityTimeoutError))
+            throw error;
+        console.error(`the app did not read a file in ${folder} within ${timeoutMs / 1000} s. On a Mac, macOS may be asking on this ` +
+            `machine's screen whether Affinity may read that folder: allow it there, or in ${allow}.`);
+        return 1;
+    }
+    finally {
+        await rm(file, { force: true });
+    }
 }
 async function dumpDocs(bridge, dir) {
     const target = resolve(dir);
@@ -213,7 +254,7 @@ async function main(argv) {
     process.on("SIGINT", stop);
     try {
         if (options.selftest)
-            return await selftest(bridge);
+            return await selftest(bridge, options);
         if (options.dumpDocs)
             return await dumpDocs(bridge, options.dumpDocs);
         const core = new McpServerCore(bridge, { listChanged: !options.http, tools: options.tools });

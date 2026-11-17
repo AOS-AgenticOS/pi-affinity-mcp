@@ -14,6 +14,11 @@
 
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
+
+/** `require` of a file of the user's, by its absolute path; the SDK's own modules are `/<name>.js`. */
+const FILE_REQUIRE = /require\(("\/[^"]+\/[^"]+")\)/;
+const requireFile = createRequire(import.meta.url);
 
 export const GATE_REFUSAL = "The preamble documentation topic has not yet been read.";
 
@@ -94,11 +99,22 @@ export async function startFakeAffinity() {
     onScript: () => {},
     /** How long the app takes to answer a message, in milliseconds. */
     answerMs: 0,
+    /** A script that reads a file runs but is never answered, as while macOS asks whether the app may read its folder. */
+    unreadable: false,
   };
 
-  /** The bridge's own scripts read and close documents; every other script is the client's. */
+  /** The bridge's own scripts read and close documents; a script that `require`s a file reads it; every other script
+   * is the client's. */
   const runScript = (script) => {
     if (script.includes("Document.all.map((d) => d.sessionUuid)")) return JSON.stringify(state.documents);
+    const file = FILE_REQUIRE.exec(script);
+    if (file) {
+      try {
+        return String(requireFile(JSON.parse(file[1])));
+      } catch (error) {
+        return `Error: ${error.message}`; // the app prints a script's exception as its answer
+      }
+    }
     const own = /const own = new Set\((\[.*?\])\);/.exec(script);
     if (own) {
       const closed = state.documents.filter((uuid) => JSON.parse(own[1]).includes(uuid));
@@ -180,6 +196,7 @@ export async function startFakeAffinity() {
         state.stall[name] -= 1;
         return undefined;
       }
+      if (state.unreadable && FILE_REQUIRE.test(String(params?.arguments?.script))) return undefined;
       return ok(result);
     }
     return error(-32601, `Method not found: ${String(method)}`);

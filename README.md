@@ -46,6 +46,11 @@ execute_script isError: false
 
 If it fails, Affinity is closed or its MCP server is switched off.
 
+`--selftest --folder <dir>` also has the app read a file it is given in `<dir>` (it ends `the app reads files in
+<dir>`). Run it once for the folder your scripts will read, with someone at the Mac: the first time Affinity reads a
+file on the Desktop (or in Documents, Downloads), macOS asks on the screen whether it may, and until someone answers,
+every script that reads a file there waits.
+
 ### pi
 
 ```bash
@@ -134,6 +139,8 @@ and the rules that keep the user's work safe, such as never closing a document t
 pi-affinity-mcp                     stdio MCP server (what MCP clients run)
 pi-affinity-mcp --http              streamable HTTP MCP server, default 127.0.0.1:7767/mcp
 pi-affinity-mcp --selftest          check that the app is reachable and scripts run
+pi-affinity-mcp --selftest --folder <dir>
+                                    … and that the app reads a file it is given in <dir>
 pi-affinity-mcp --dump-docs <dir>   save the SDK documentation and tool schemas to <dir>
 ```
 
