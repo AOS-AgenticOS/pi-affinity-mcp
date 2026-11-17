@@ -29,7 +29,7 @@ fails and says it may still have run.
 ## Install
 
 ```bash
-npm install -g github:mikolodz/pi-affinity-mcp
+npm install -g github:AOS-AgenticOS/pi-affinity-mcp
 pi-affinity-mcp --selftest
 ```
 
@@ -49,7 +49,7 @@ If it fails, Affinity is closed or its MCP server is switched off.
 ### pi
 
 ```bash
-pi install git:github.com/mikolodz/pi-affinity-mcp
+pi install git:github.com/AOS-AgenticOS/pi-affinity-mcp
 ```
 
 The package registers the server with pi and adds the `mcp-affinity` skill; after a restart or `/reload`
