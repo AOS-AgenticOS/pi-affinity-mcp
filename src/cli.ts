@@ -172,6 +172,7 @@ async function selftest(bridge: AffinityBridge, options: Options): Promise<numbe
 async function readsFolder(bridge: AffinityBridge, folder: string, timeoutMs: number): Promise<number> {
   const marker = randomUUID();
   const file = join(folder, `.selftest-${marker}.js`); // a name of its own: the app keeps what it once required
+  const allow = "System Settings → Privacy & Security → Files and Folders → Affinity";
   await writeFile(file, `module.exports = ${JSON.stringify(marker)};\n`);
   try {
     const result = await bridge.callTool("execute_script", { script: `console.log(require(${JSON.stringify(file)}));` });
@@ -180,14 +181,13 @@ async function readsFolder(bridge: AffinityBridge, folder: string, timeoutMs: nu
       console.log(`the app reads files in ${folder}`);
       return 0;
     }
-    console.error(`the app could not read ${file}: ${answer.slice(0, 300)}`);
+    console.error(`the app could not read ${file}: ${answer.slice(0, 200)}. On a Mac, allow Affinity that folder in ${allow}.`);
     return 1;
   } catch (error) {
     if (!(error instanceof AffinityTimeoutError)) throw error;
     console.error(
       `the app did not read a file in ${folder} within ${timeoutMs / 1000} s. On a Mac, macOS may be asking on this ` +
-        "machine's screen whether Affinity may read that folder: allow it there, or in System Settings → " +
-        "Privacy & Security → Files and Folders → Affinity.",
+        `machine's screen whether Affinity may read that folder: allow it there, or in ${allow}.`,
     );
     return 1;
   } finally {
