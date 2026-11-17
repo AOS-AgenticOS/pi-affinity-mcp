@@ -10,6 +10,7 @@
  * bridge holds the one long-lived upstream session; clients just POST.
  */
 
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import type { McpServerCore } from "./mcp.js";
@@ -81,11 +82,11 @@ export function assertBindIsSafe(host: string, token: string | undefined): void 
 
 export function startHttpServer(core: McpServerCore, options: HttpServerOptions): Promise<Server> {
   assertBindIsSafe(options.host, options.token);
-  const authorized = (request: IncomingMessage): boolean => {
-    if (!options.token) return true;
-    const header = request.headers.authorization ?? "";
-    return header === `Bearer ${options.token}`;
-  };
+  // Compared as digests, in constant time: neither the token's length nor how much of it matched shows in the timing.
+  const digest = (value: string): Buffer => createHash("sha256").update(value).digest();
+  const expected = options.token ? digest(`Bearer ${options.token}`) : undefined;
+  const authorized = (request: IncomingMessage): boolean =>
+    expected === undefined || timingSafeEqual(digest(request.headers.authorization ?? ""), expected);
 
   const server = createServer((request, response) => {
     void (async () => {

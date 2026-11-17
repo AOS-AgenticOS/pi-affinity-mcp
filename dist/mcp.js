@@ -55,7 +55,9 @@ export class McpServerCore {
                 return ok({});
             case "tools/list": {
                 try {
-                    return ok({ tools: await this.bridge.listTools() });
+                    const tools = await this.bridge.listTools();
+                    const offered = this.options.tools;
+                    return ok({ tools: offered ? tools.filter((tool) => offered.has(String(tool.name))) : tools });
                 }
                 catch (error) {
                     return fail(-32603, `Affinity unavailable: ${error.message}`);
@@ -65,6 +67,9 @@ export class McpServerCore {
                 const name = message.params?.name;
                 if (typeof name !== "string" || !name)
                     return fail(-32602, "tools/call needs a tool name");
+                if (this.options.tools && !this.options.tools.has(name)) {
+                    return fail(-32602, `Tool not offered by this server: ${name}`);
+                }
                 const args = (message.params?.arguments ?? {});
                 try {
                     return ok(await this.bridge.callTool(name, args));

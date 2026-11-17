@@ -30,6 +30,8 @@ Options:
   --host <host>      HTTP bind address (default 127.0.0.1)
   --port <port>      HTTP port (default 7767)
   --token <secret>   bearer token required by --http (env AFFINITY_MCP_TOKEN)
+  --tools <a,b,…>    offer only these tools and refuse the others (env AFFINITY_MCP_TOOLS)
+  --close-documents  on SIGTERM or SIGINT, close the documents this server's scripts opened
   --debug            log protocol activity to stderr
   --version          print the version
   --help             print this help
@@ -38,6 +40,7 @@ Environment:
   AFFINITY_MCP_URL      same as --url
   AFFINITY_MCP_TIMEOUT  same as --timeout
   AFFINITY_MCP_TOKEN    same as --token
+  AFFINITY_MCP_TOOLS    same as --tools
 `;
 
 type Options = {
@@ -48,9 +51,20 @@ type Options = {
   host: string;
   port: number;
   token?: string;
+  tools?: ReadonlySet<string>;
+  closeDocuments: boolean;
   selftest: boolean;
   dumpDocs?: string;
 };
+
+/** How long closing the documents may take when the server is told to stop. */
+const CLOSE_DOCUMENTS_MS = 10_000;
+
+function toolSet(value: string): ReadonlySet<string> {
+  const names = value.split(",").map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) throw new Error("--tools needs at least one tool name");
+  return new Set(names);
+}
 
 function parseArgs(argv: string[]): Options | "help" | "version" {
   const options: Options = {
@@ -61,6 +75,8 @@ function parseArgs(argv: string[]): Options | "help" | "version" {
     host: "127.0.0.1",
     port: 7767,
     token: process.env.AFFINITY_MCP_TOKEN,
+    tools: process.env.AFFINITY_MCP_TOOLS ? toolSet(process.env.AFFINITY_MCP_TOOLS) : undefined,
+    closeDocuments: false,
     selftest: false,
   };
 
@@ -92,6 +108,12 @@ function parseArgs(argv: string[]): Options | "help" | "version" {
         break;
       case "--token":
         options.token = next();
+        break;
+      case "--tools":
+        options.tools = toolSet(next());
+        break;
+      case "--close-documents":
+        options.closeDocuments = true;
         break;
       case "--debug":
         options.debug = true;
@@ -189,19 +211,36 @@ async function main(argv: string[]): Promise<number> {
     url: options.url,
     timeoutMs: options.timeoutMs,
     debug: options.debug,
+    ownDocuments: options.closeDocuments,
   });
-  const shutdown = (): void => {
+  const shutdown = async (): Promise<void> => {
+    if (options.closeDocuments) {
+      const giveUp = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("timed out")), CLOSE_DOCUMENTS_MS).unref();
+      });
+      try {
+        const closed = await Promise.race([bridge.closeDocuments(), giveUp]);
+        console.error(`[pi-affinity-mcp] closed ${closed.length} document(s)`);
+      } catch (error) {
+        console.error(`[pi-affinity-mcp] documents left open: ${(error as Error).message}`);
+      }
+    }
     bridge.close();
     process.exit(0);
   };
-  process.once("SIGTERM", shutdown);
-  process.once("SIGINT", shutdown);
+  // A second signal while the documents close changes nothing: whoever stops this server may ask twice.
+  let stopping: Promise<void> | undefined;
+  const stop = (): void => {
+    stopping ??= shutdown();
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
 
   try {
     if (options.selftest) return await selftest(bridge);
     if (options.dumpDocs) return await dumpDocs(bridge, options.dumpDocs);
 
-    const core = new McpServerCore(bridge, { listChanged: !options.http });
+    const core = new McpServerCore(bridge, { listChanged: !options.http, tools: options.tools });
     if (options.http) {
       const server = await startHttpServer(core, {
         host: options.host,

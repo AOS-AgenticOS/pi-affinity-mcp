@@ -12,6 +12,8 @@ before(async () => {
 
 beforeEach(() => {
   fake.state.calls.length = 0;
+  fake.state.documents = [];
+  fake.state.onScript = () => {};
 });
 
 after(async () => {
@@ -185,5 +187,55 @@ test("image results survive the round trip", async () => {
     });
     const image = result.content.find((item) => item.type === "image");
     assert.equal(image.mimeType, "image/jpeg");
+  });
+});
+
+const script = (source) => ["execute_script", { script: source }];
+
+test("closes the documents its scripts opened, and no document a person opened", async () => {
+  fake.state.documents = ["PERSON-BEFORE"];
+  await withBridge({ ownDocuments: true }, async (bridge) => {
+    fake.state.onScript = () => fake.state.documents.push("AGENT-1");
+    await bridge.callTool(...script("open a document"));
+    fake.state.documents.push("PERSON-BETWEEN");
+    fake.state.onScript = () => fake.state.documents.push("AGENT-2");
+    await bridge.callTool(...script("open another"));
+
+    assert.deepEqual((await bridge.closeDocuments()).sort(), ["AGENT-1", "AGENT-2"]);
+    assert.deepEqual(fake.state.documents, ["PERSON-BEFORE", "PERSON-BETWEEN"]);
+  });
+});
+
+test("a document its script closed itself is not closed again", async () => {
+  await withBridge({ ownDocuments: true }, async (bridge) => {
+    fake.state.onScript = () => fake.state.documents.push("AGENT-1");
+    await bridge.callTool(...script("open"));
+    fake.state.onScript = () => fake.state.documents.pop();
+    await bridge.callTool(...script("close it"));
+    assert.deepEqual(await bridge.closeDocuments(), []);
+  });
+});
+
+test("a document opened by a script that never answered is still closed", async () => {
+  await withBridge({ ownDocuments: true, timeoutMs: 300 }, async (bridge) => {
+    await bridge.callTool(...script("warm up"));
+    // The script runs in the app and opens its document; its answer never arrives.
+    fake.state.onScript = () => {
+      fake.state.documents.push("AGENT-LATE");
+      fake.state.stall.execute_script = 1;
+    };
+    await assert.rejects(bridge.callTool(...script("opens, then hangs")), /did not answer/);
+    assert.deepEqual(await bridge.closeDocuments(), ["AGENT-LATE"]);
+    assert.deepEqual(fake.state.documents, []);
+  });
+});
+
+test("without ownDocuments nothing is tracked or closed", async () => {
+  await withBridge({}, async (bridge) => {
+    fake.state.onScript = () => fake.state.documents.push("SOMEONE");
+    await bridge.callTool(...script("open"));
+    assert.equal(fake.state.executions > 0, true);
+    assert.deepEqual(await bridge.closeDocuments(), []);
+    assert.deepEqual(fake.state.documents, ["SOMEONE"]);
   });
 });

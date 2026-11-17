@@ -1,6 +1,6 @@
 {
   "name": "pi-affinity-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server and Pi package for Affinity by Canva: read the JS SDK docs, run scripts against the live app, render spreads.",
   "license": "MIT",
   "type": "module",
@@ -69,10 +69,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mikolodz/pi-affinity-mcp.git"
+    "url": "git+https://github.com/AOS-AgenticOS/pi-affinity-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/mikolodz/pi-affinity-mcp/issues"
+    "url": "https://github.com/AOS-AgenticOS/pi-affinity-mcp/issues"
   },
-  "homepage": "https://github.com/mikolodz/pi-affinity-mcp#readme"
+  "homepage": "https://github.com/AOS-AgenticOS/pi-affinity-mcp#readme"
 }

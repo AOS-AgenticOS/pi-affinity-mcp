@@ -9,6 +9,7 @@
  * Deliberately stateless: no Mcp-Session-Id, no server-initiated stream. The
  * bridge holds the one long-lived upstream session; clients just POST.
  */
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import { SERVER_NAME, VERSION } from "./version.js";
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -63,12 +64,10 @@ export function assertBindIsSafe(host, token) {
 }
 export function startHttpServer(core, options) {
     assertBindIsSafe(options.host, options.token);
-    const authorized = (request) => {
-        if (!options.token)
-            return true;
-        const header = request.headers.authorization ?? "";
-        return header === `Bearer ${options.token}`;
-    };
+    // Compared as digests, in constant time: neither the token's length nor how much of it matched shows in the timing.
+    const digest = (value) => createHash("sha256").update(value).digest();
+    const expected = options.token ? digest(`Bearer ${options.token}`) : undefined;
+    const authorized = (request) => expected === undefined || timingSafeEqual(digest(request.headers.authorization ?? ""), expected);
     const server = createServer((request, response) => {
         void (async () => {
             const path = (request.url ?? "/").split("?")[0];
